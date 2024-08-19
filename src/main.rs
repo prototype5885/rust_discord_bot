@@ -131,13 +131,12 @@ impl Handler {
             Ok(content) => content,
             Err(why) => {
                 println!("Error downloading attachment: {:?}", why);
-                return "".to_string();
+                return "Error downloading attachment".to_string();
             }
         };
         println!("Converting to base64...");
         let base64 = base64::encode(content);
         println!("Size is: {}", base64.len());
-
 
         base64
     }
@@ -179,7 +178,7 @@ impl EventHandler for Handler {
                     if attachment.size > 0 {
                         let content_type = match &attachment.content_type {
                             Some(value) => value,
-                            None => ""
+                            None => "",
                         };
                         if supported_img_types.contains(&content_type) {
                             println!("Received an image as attachment...");
