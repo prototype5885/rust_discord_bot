@@ -43,9 +43,10 @@ impl Handler {
             },
         };
 
+        info!("Adding user's message to history...");
         local_conversation.add_message(user_content);
 
-        debug!("Content type is: {}", content_type);
+        info!("Content type is: {}", content_type);
         if content_type == "text" {
             // convert the entire conversation to json string
             json_to_send = match local_conversation.get_json() {
@@ -98,10 +99,12 @@ impl Handler {
                 image_base64, content_type, message
             );
         }
-        println!("{}", json_to_send);
+        // println!("{}", json_to_send);
+        info!("size in kb: {}", json_to_send.len() as f32 / 1024.0);
 
         // send the POST request and get the response
-        let response_result = self
+        info!("Sending POST request...");
+        let post_request = self
             .client
             .post(&self.url)
             .body(json_to_send)
@@ -110,7 +113,8 @@ impl Handler {
             .await;
 
         // check if it was successful
-        let response: reqwest::Response = match response_result {
+        info!("Getting response to POST request...");
+        let response: reqwest::Response = match post_request {
             Ok(res) => res,
             Err(error) => {
                 let err_msg = "Error sending POST request to gemini";
@@ -120,6 +124,7 @@ impl Handler {
             }
         };
 
+        info!("Getting string from POST request response...");
         let response_json = match response.text().await {
             Ok(text) => text,
             Err(error) => {
@@ -131,6 +136,7 @@ impl Handler {
         };
 
         // deserializes the json received as reply
+        info!("Deserializing string from POST request response...");
         let response_json: Response = match serde_json::from_str(&&response_json) {
             Ok(res) => res,
             Err(error) => {
@@ -144,6 +150,7 @@ impl Handler {
         if !&response_json.candidates.is_empty()
             && &response_json.candidates[0].finishReason == "STOP"
         {
+            info!("Successful response from gemini");
             let response_text: &str = &response_json.candidates[0].content.parts[0].text.clone();
 
             let gemini_response = Contents {
@@ -153,8 +160,9 @@ impl Handler {
                 },
             };
 
+            info!("Adding bot's reply to history...");
             local_conversation.add_message(gemini_response);
-            info!("Successful response from gemini");
+
             return (
                 response_text.to_string(),
                 response_json.usageMetadata.totalTokenCount,
@@ -191,6 +199,7 @@ impl EventHandler for Handler {
 
         if msg.author.id == 202850246261211136 {
             if msg.content == "!resetgemini" {
+                info!("Reseting conversation...");
                 self.reset_conversation().await;
                 ctx.set_presence(
                     Option::from(ActivityData::custom("Tokens: 0")),
@@ -209,87 +218,100 @@ impl EventHandler for Handler {
                 return;
             }
         }
+        // checks if mentioned
+        let mut mentioned: bool = false;
         for mention in &msg.mentions {
             if mention.id == bot_id {
-                // removes mention from message
-                let mut no_mention_msg = msg.content.replace(&discord_bot_id, "");
-                if no_mention_msg.chars().next() == Some(' ') {
-                    // Remove the first character (a space in this case)
-                    no_mention_msg = no_mention_msg[1..].to_string();
-                }
+                mentioned = true;
+            }
+        }
 
-                // sends typing indicator thing to discord
-                if let Err(why) = msg.channel_id.broadcast_typing(&ctx.http).await {
-                    error!("Error sending typing: {why:?}");
-                }
+        // check if starts with question mark
+        let mut question_mark: bool = false;
+        if msg.content.starts_with("? ") {
+            question_mark = true;
+        }
 
-                // sets these values to default, will be used later if there is image attachment
-                let mut base64: String = "".to_string();
-                let mut content_type: String = "text".to_string();
+        if mentioned || question_mark {
+            // removes mention from message
+            let mut no_mention_msg = msg.content.replace(&discord_bot_id, "");
+            if no_mention_msg.chars().next() == Some(' ') {
+                no_mention_msg = no_mention_msg[1..].to_string();
+            } else if question_mark {
+                no_mention_msg = no_mention_msg[2..].to_string();
+            }
 
-                // checks if there is attachment and grabs the first one
-                if let Some(attachment) = msg.attachments.get(0) {
-                    info!("Attachment found: {:?}", attachment);
-                    // gets the attachment content type
-                    content_type = match &attachment.content_type {
-                        Some(value) => value.to_string(),
-                        None => {
-                            // returns if for some reason there is no content type
-                            let err_msg = "Could not find content type of attachment";
-                            if let Err(err) = msg.reply(&ctx.http, err_msg).await {
+            // sends typing indicator thing to discord
+            if let Err(why) = msg.channel_id.broadcast_typing(&ctx.http).await {
+                error!("Error sending typing: {why:?}");
+            }
+
+            // sets these values to default, will be used later if there is image attachment
+            let mut base64: String = "".to_string();
+            let mut content_type: String = "text".to_string();
+
+            // checks if there is attachment and grabs the first one
+            if let Some(attachment) = msg.attachments.get(0) {
+                info!("Attachment found: {:?}", attachment);
+                // gets the attachment content type
+                content_type = match &attachment.content_type {
+                    Some(value) => value.to_string(),
+                    None => {
+                        // returns if for some reason there is no content type
+                        let err_msg = "Could not find content type of attachment";
+                        if let Err(err) = msg.reply(&ctx.http, err_msg).await {
+                            error!("Error sending message: {err:?}");
+                        };
+                        return;
+                    }
+                };
+                // check if attachment is in supported format
+                let wtf: &str = &content_type;
+                if ["image/jpg", "image/jpeg", "image/png"].contains(&wtf) {
+                    // download the attachment
+                    info!("Received an image as attachment, downloading...");
+                    let content = match attachment.download().await {
+                        Ok(content) => content,
+                        Err(err) => {
+                            // if for some reason download fails
+                            error!("{:?}", err);
+                            if let Err(err) =
+                                msg.reply(&ctx.http, "Error downloading attachment").await
+                            {
                                 error!("Error sending message: {err:?}");
                             };
                             return;
                         }
                     };
-                    // check if attachment is in supported format
-                    let wtf: &str = &content_type;
-                    if ["image/jpg", "image/jpeg", "image/png"].contains(&wtf) {
-                        // download the attachment
-                        info!("Received an image as attachment, downloading...");
-                        let content = match attachment.download().await {
-                            Ok(content) => content,
-                            Err(err) => {
-                                // if for some reason download fails
-                                error!("{:?}", err);
-                                if let Err(err) =
-                                    msg.reply(&ctx.http, "Error downloading attachment").await
-                                {
-                                    error!("Error sending message: {err:?}");
-                                };
-                                return;
-                            }
-                        };
-                        // converts to base64
-                        info!("Converting to base64...");
-                        base64 = base64::encode(content);
-                        info!("Size is: {}", base64.len());
-                    } else {
-                        if let Err(err) = msg
-                            .reply(&ctx.http, "Unsupported attachment type".to_string())
-                            .await
-                        {
-                            error!("{err:?}");
-                        }
-                        return;
+                    // converts to base64
+                    info!("Converting to base64...");
+                    base64 = base64::encode(content);
+                    info!("Size is: {}", base64.len());
+                } else {
+                    if let Err(err) = msg
+                        .reply(&ctx.http, "Unsupported attachment type".to_string())
+                        .await
+                    {
+                        error!("{err:?}");
                     }
+                    return;
                 }
-                let response = self
-                    .send_msg_to_gemini(no_mention_msg, base64, content_type)
-                    .await;
-                let chunks = split_string(&response.0);
-                for (_, part) in chunks.iter().enumerate() {
-                    if let Err(why) = msg.reply(&ctx.http, part).await {
-                        error!("Error sending message: {why:?}");
-                    }
+            }
+            let response = self
+                .send_msg_to_gemini(no_mention_msg, base64, content_type)
+                .await;
+            let chunks = split_string(&response.0);
+            for (_, part) in chunks.iter().enumerate() {
+                if let Err(why) = msg.reply(&ctx.http, part).await {
+                    error!("Error sending message: {why:?}");
                 }
-                if response.1 != -1 {
-                    let status = format!("Tokens: {}", response.1);
-                    ctx.set_presence(
-                        Option::from(ActivityData::custom(status)),
-                        Default::default(),
-                    );
-                }
+            }
+            if response.1 != -1 {
+                let status = format!("Tokens: {}", response.1);
+                ctx.set_presence(
+                    Option::from(ActivityData::custom(status)),
+                    Default::default(),
+                );
             }
         }
     }
@@ -299,7 +321,9 @@ impl EventHandler for Handler {
             Option::from(ActivityData::custom("Tokens: 0")),
             Default::default(),
         );
-        info!("{} is connected!", ready.user.name);
+        let msg = format!("{} is connected!", ready.user.name);
+        info!(msg);
+        println!("{}", msg);
     }
 }
 
@@ -333,7 +357,7 @@ async fn main() {
     let file_appender = tracing_appender::rolling::daily("log", "app.log");
 
     tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::DEBUG) // Set max level to DEBUG
+        .with_max_level(tracing::Level::INFO) // Set max level to DEBUG
         .with_writer(file_appender)
         .with_ansi(false)
         .init();
