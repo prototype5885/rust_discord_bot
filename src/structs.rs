@@ -88,6 +88,11 @@ impl Conversation {
         let _ = &self.contents.push(msg);
     }
 
+    pub fn revert(&mut self) {
+        tracing::info!("Deleting last user message");
+        let _ = &self.contents.pop();
+    }
+
     pub fn get_json(&self) -> Result<String, serde_json::Error> {
         serde_json::to_string(&self)
     }
@@ -204,7 +209,7 @@ impl Default for Error {
     fn default() -> Self {
         Error {
             code: -1,
-            message: "".to_string(),
+            message: "Unknown error".to_string(),
             status: "".to_string(),
         }
     }
@@ -223,6 +228,23 @@ impl Default for SafetySettings {
         SafetySettings {
             category: String::from(""),
             threshold: String::from(""),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[allow(non_snake_case)]
+#[serde(default)]
+pub struct InlineData {
+    pub data: String,
+    pub mimeType: String,
+}
+
+impl Default for InlineData {
+    fn default() -> Self {
+        InlineData {
+            data: String::from(""),
+            mimeType: String::from(""),
         }
     }
 }

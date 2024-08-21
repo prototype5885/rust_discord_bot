@@ -2,3 +2,5 @@
 .env
 .directory
 /.idea
+/log
+/.vscode
