@@ -4,8 +4,8 @@ use serde::{Deserialize, Serialize};
 #[allow(non_snake_case)]
 #[serde(default)]
 pub struct Response {
-    pub candidates: Vec<Candidates>,
-    // promptFeedback: PromptFeedback,
+    pub candidates: [Candidates; 1],
+
     pub usageMetadata: UsageMetadata,
     pub error: Error,
 }
@@ -13,7 +13,7 @@ pub struct Response {
 impl Default for Response {
     fn default() -> Self {
         Response {
-            candidates: Vec::new(),
+            candidates: [Candidates::default()],
             usageMetadata: UsageMetadata::default(),
             error: Error::default(),
         }
@@ -27,16 +27,33 @@ pub struct Candidates {
     pub content: Content,
     pub finishReason: String,
     pub index: i32,
-    pub safetyRatings: Vec<SafetyRatings>,
+    pub safetyRatings: [SafetyRatings; 4],
 }
 
 impl Default for Candidates {
     fn default() -> Self {
         Candidates {
             content: Content::default(),
-            finishReason: "Unknown".to_string(),
+            finishReason: String::from("Unknown"),
             index: -1,
-            safetyRatings: Vec::new(),
+            safetyRatings: [
+                SafetyRatings {
+                    category: String::from(""),
+                    probability: String::from(""),
+                },
+                SafetyRatings {
+                    category: String::from(""),
+                    probability: String::from(""),
+                },
+                SafetyRatings {
+                    category: String::from(""),
+                    probability: String::from(""),
+                },
+                SafetyRatings {
+                    category: String::from(""),
+                    probability: String::from(""),
+                },
+            ],
         }
     }
 }
@@ -45,15 +62,15 @@ impl Default for Candidates {
 #[allow(non_snake_case)]
 #[serde(default)]
 pub struct Content {
-    pub parts: Vec<Parts>,
     pub role: String,
+    pub parts: [Parts; 1],
 }
 
 impl Default for Content {
     fn default() -> Self {
         Content {
-            parts: Vec::new(),
-            role: "".to_string(),
+            role: String::from(""),
+            parts: [Parts::default()],
         }
     }
 }
@@ -69,7 +86,7 @@ pub struct Contents {
 impl Default for Contents {
     fn default() -> Self {
         Contents {
-            role: "".to_string(),
+            role: String::from(""),
             parts: Parts::default(),
         }
     }
@@ -80,17 +97,17 @@ impl Default for Contents {
 #[serde(default)]
 pub struct Conversation {
     pub contents: Vec<Contents>,
-    pub safety_settings: Vec<SafetySettings>,
+    pub safety_settings: [SafetySettings; 4],
 }
 
 impl Conversation {
     pub fn add_message(&mut self, msg: Contents) {
-        let _ = &self.contents.push(msg);
+        let _ = self.contents.push(msg);
     }
 
     pub fn revert(&mut self) {
         tracing::info!("Deleting last user message");
-        let _ = &self.contents.pop();
+        let _ = self.contents.pop();
     }
 
     pub fn get_json(&self) -> Result<String, serde_json::Error> {
@@ -98,7 +115,13 @@ impl Conversation {
     }
 
     pub fn reset_conversation(&mut self) {
-        let _ = &self.contents.clear();
+        let _ = self.contents.clear();
+    }
+
+    pub fn delete_old(&mut self) {
+        while self.contents.len() >= 20 {
+            self.contents.remove(0);
+        }
     }
 }
 
@@ -106,7 +129,24 @@ impl Default for Conversation {
     fn default() -> Self {
         Conversation {
             contents: Vec::new(),
-            safety_settings: Vec::new(),
+            safety_settings: [
+                SafetySettings {
+                    category: String::from("HARM_CATEGORY_SEXUALLY_EXPLICIT"),
+                    threshold: String::from("BLOCK_NONE"),
+                },
+                SafetySettings {
+                    category: String::from("HARM_CATEGORY_HATE_SPEECH"),
+                    threshold: String::from("BLOCK_NONE"),
+                },
+                SafetySettings {
+                    category: String::from("HARM_CATEGORY_HARASSMENT"),
+                    threshold: String::from("BLOCK_NONE"),
+                },
+                SafetySettings {
+                    category: String::from("HARM_CATEGORY_DANGEROUS_CONTENT"),
+                    threshold: String::from("BLOCK_NONE"),
+                },
+            ],
         }
     }
 }
@@ -121,7 +161,7 @@ pub struct Parts {
 impl Default for Parts {
     fn default() -> Self {
         Parts {
-            text: "".to_string(),
+            text: String::from(""),
         }
     }
 }
@@ -137,8 +177,8 @@ pub struct FileData {
 impl Default for FileData {
     fn default() -> Self {
         FileData {
-            mimeType: "".to_string(),
-            fileUri: "".to_string(),
+            mimeType: String::from(""),
+            fileUri: String::from(""),
         }
     }
 }
@@ -148,14 +188,31 @@ impl Default for FileData {
 #[serde(default)]
 pub struct PromptFeedback {
     pub blockReason: String,
-    pub safetyRatings: Vec<SafetyRatings>,
+    pub safetyRatings: [SafetyRatings; 4],
 }
 
 impl Default for PromptFeedback {
     fn default() -> Self {
         PromptFeedback {
-            blockReason: "".to_string(),
-            safetyRatings: Vec::new(),
+            blockReason: String::from(""),
+            safetyRatings: [
+                SafetyRatings {
+                    category: String::from(""),
+                    probability: String::from(""),
+                },
+                SafetyRatings {
+                    category: String::from(""),
+                    probability: String::from(""),
+                },
+                SafetyRatings {
+                    category: String::from(""),
+                    probability: String::from(""),
+                },
+                SafetyRatings {
+                    category: String::from(""),
+                    probability: String::from(""),
+                },
+            ],
         }
     }
 }
@@ -171,8 +228,8 @@ pub struct SafetyRatings {
 impl Default for SafetyRatings {
     fn default() -> Self {
         SafetyRatings {
-            category: "".to_string(),
-            probability: "".to_string(),
+            category: String::from(""),
+            probability: String::from(""),
         }
     }
 }
@@ -209,8 +266,8 @@ impl Default for Error {
     fn default() -> Self {
         Error {
             code: -1,
-            message: "Unknown error".to_string(),
-            status: "".to_string(),
+            message: String::from("Unknown error"),
+            status: String::from(""),
         }
     }
 }

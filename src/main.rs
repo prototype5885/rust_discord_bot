@@ -7,7 +7,7 @@ use serenity::model::channel::Message;
 use serenity::model::gateway::Ready;
 use serenity::prelude::*;
 
-use tracing::{debug, error, info};
+use tracing::{error, info};
 
 struct Handler {
     gemini_api_key: String,
@@ -99,7 +99,8 @@ impl Handler {
                 image_base64, content_type, message
             );
         }
-        // println!("{}", json_to_send);
+        // println!("{}", &json_to_send);
+        // println!("{}", local_conversation.contents.len());
         info!("size in kb: {}", json_to_send.len() as f32 / 1024.0);
 
         // send the POST request and get the response
@@ -135,6 +136,8 @@ impl Handler {
             }
         };
 
+        // println!("{}", response_json);
+
         // deserializes the json received as reply
         info!("Deserializing string from POST request response...");
         let response_json: Response = match serde_json::from_str(&&response_json) {
@@ -162,6 +165,8 @@ impl Handler {
 
             info!("Adding bot's reply to history...");
             local_conversation.add_message(gemini_response);
+
+            local_conversation.delete_old();
 
             return (
                 response_text.to_string(),
@@ -306,6 +311,7 @@ impl EventHandler for Handler {
                     error!("Error sending message: {why:?}");
                 }
             }
+            // if answer was really successful
             if response.1 != -1 {
                 let status = format!("Tokens: {}", response.1);
                 ctx.set_presence(
@@ -354,10 +360,24 @@ fn split_string(s: &String) -> Vec<String> {
 
 #[tokio::main]
 async fn main() {
+    // let mut vec: Vec<i32> = vec![];
+
+    // for i in 0..10 {
+    //     if vec.len() >= 5 {
+    //         vec.remove(0);
+    //     }
+
+    //     vec.push(i);
+
+    //     for element in vec.iter() {
+    //         print!("{}, ", element);
+    //     }
+    // }
+
     let file_appender = tracing_appender::rolling::daily("log", "app.log");
 
     tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::INFO) // Set max level to DEBUG
+        .with_max_level(tracing::Level::DEBUG) // Set max level to DEBUG
         .with_writer(file_appender)
         .with_ansi(false)
         .init();
@@ -374,27 +394,7 @@ async fn main() {
         | GatewayIntents::MESSAGE_CONTENT;
 
     // this will store the conversation history with gemini
-    let conversation = Conversation {
-        contents: Vec::new(),
-        safety_settings: vec![
-            SafetySettings {
-                category: String::from("HARM_CATEGORY_SEXUALLY_EXPLICIT"),
-                threshold: String::from("BLOCK_NONE"),
-            },
-            SafetySettings {
-                category: String::from("HARM_CATEGORY_HATE_SPEECH"),
-                threshold: String::from("BLOCK_NONE"),
-            },
-            SafetySettings {
-                category: String::from("HARM_CATEGORY_HARASSMENT"),
-                threshold: String::from("BLOCK_NONE"),
-            },
-            SafetySettings {
-                category: String::from("HARM_CATEGORY_DANGEROUS_CONTENT"),
-                threshold: String::from("BLOCK_NONE"),
-            },
-        ],
-    };
+    let conversation = Conversation::default();
 
     let handler = Handler {
         gemini_api_key: gemini_api_key.clone(),
