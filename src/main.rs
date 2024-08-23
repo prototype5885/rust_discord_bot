@@ -32,7 +32,6 @@ impl Handler {
         info!("Forwarding message to gemini...");
         let json_to_send: String;
 
-        // lock the conversation struct that holds history and add the new message to it
         let mut local_conversation = self.conversation.lock().await;
 
         // instance struct that will store the user's message
@@ -48,12 +47,10 @@ impl Handler {
 
         info!("Content type is: {}", content_type);
         if content_type == "text" {
-            // convert the entire conversation to json string
             json_to_send = match local_conversation.get_json() {
                 Ok(text) => text,
                 Err(error) => {
                     error!("Error converting to json: {}", error);
-                    // messages_to_send.push(String::from("Error creating json of user's message"));
                     local_conversation.revert();
                     return ("Error creating json of user's message".to_string(), -1);
                 }
@@ -99,11 +96,8 @@ impl Handler {
                 image_base64, content_type, message
             );
         }
-        // println!("{}", &json_to_send);
-        // println!("{}", local_conversation.contents.len());
         info!("size in kb: {}", json_to_send.len() as f32 / 1024.0);
 
-        // send the POST request and get the response
         info!("Sending POST request...");
         let post_request = self
             .client
@@ -113,7 +107,6 @@ impl Handler {
             .send()
             .await;
 
-        // check if it was successful
         info!("Getting response to POST request...");
         let response: reqwest::Response = match post_request {
             Ok(res) => res,
@@ -136,9 +129,6 @@ impl Handler {
             }
         };
 
-        // println!("{}", response_json);
-
-        // deserializes the json received as reply
         info!("Deserializing string from POST request response...");
         let response_json: Response = match serde_json::from_str(&&response_json) {
             Ok(res) => res,
@@ -150,6 +140,7 @@ impl Handler {
             }
         };
 
+        // if response was success
         if !&response_json.candidates.is_empty()
             && &response_json.candidates[0].finishReason == "STOP"
         {
@@ -335,24 +326,16 @@ impl EventHandler for Handler {
 
 fn split_string(s: &String) -> Vec<String> {
     let max_len = 2000;
-    // Ensure the string is non-empty and the max length is positive
     if s.is_empty() || max_len == 0 {
         return vec![];
     }
 
-    // Create an empty vector to hold the string parts
     let mut parts = Vec::new();
 
-    // Iterate over the string, taking slices of max_len size
     let mut start = 0;
     while start < s.len() {
-        // Calculate the end of the slice, ensuring it doesn't exceed the string length
         let end = usize::min(start + max_len, s.len());
-
-        // Push the slice as a new string into the vector
         parts.push(s[start..end].to_string());
-
-        // Move the start index forward
         start += max_len;
     }
     parts
@@ -360,24 +343,10 @@ fn split_string(s: &String) -> Vec<String> {
 
 #[tokio::main]
 async fn main() {
-    // let mut vec: Vec<i32> = vec![];
-
-    // for i in 0..10 {
-    //     if vec.len() >= 5 {
-    //         vec.remove(0);
-    //     }
-
-    //     vec.push(i);
-
-    //     for element in vec.iter() {
-    //         print!("{}, ", element);
-    //     }
-    // }
-
     let file_appender = tracing_appender::rolling::daily("log", "app.log");
 
     tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::DEBUG) // Set max level to DEBUG
+        .with_max_level(tracing::Level::DEBUG)
         .with_writer(file_appender)
         .with_ansi(false)
         .init();

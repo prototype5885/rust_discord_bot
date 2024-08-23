@@ -288,20 +288,3 @@ impl Default for SafetySettings {
         }
     }
 }
-
-#[derive(Debug, Serialize, Deserialize)]
-#[allow(non_snake_case)]
-#[serde(default)]
-pub struct InlineData {
-    pub data: String,
-    pub mimeType: String,
-}
-
-impl Default for InlineData {
-    fn default() -> Self {
-        InlineData {
-            data: String::from(""),
-            mimeType: String::from(""),
-        }
-    }
-}
